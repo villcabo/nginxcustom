@@ -77,7 +77,7 @@ jobs:
           log "Versión de Nginx detectada: $NGINX_VERSION"
 
           # Definir el nombre de la imagen y el tag
-          IMAGE_NAME="${{ DOCKER_USERNAME }}/$DIR"
+          IMAGE_NAME="${{ env.DOCKER_USERNAME }}/$DIR"
           IMAGE_TAG="$NGINX_VERSION"
 
           log "Nombre de la imagen: $IMAGE_NAME"
