@@ -1,0 +1,53 @@
+name: Build and Push Nginx Images
+
+on:
+  pull_request:
+    paths:
+      - nginx-logrorate
+      - nginx-logrotate-geoip
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Find changed directories
+        id: changed_dirs
+        run: |
+          echo "Detecting changed directories..."
+          CHANGED_DIRS=$(git diff --name-only HEAD^ HEAD | grep Dockerfile | awk -F'/' '{print $1}' | sort -u | xargs)
+          echo "Changed directories: $CHANGED_DIRS"
+          echo "dirs=$CHANGED_DIRS" >> $GITHUB_ENV
+
+      - name: Build and Push Docker images
+        if: env.dirs != ''
+        run: |
+          for dir in ${{ env.dirs }}; do
+            echo "Processing directory: $dir"
+
+            # Extract the Nginx version from the Dockerfile
+            NGINX_VERSION=$(grep -oP '(?<=FROM nginx:)[^ ]+' "$dir/Dockerfile" | head -1)
+
+            if [[ -z "$NGINX_VERSION" ]]; then
+              echo "No Nginx version found in $dir/Dockerfile, skipping..."
+              continue
+            fi
+
+            IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/$dir"
+            IMAGE_TAG="$NGINX_VERSION"
+
+            echo "Building image: $IMAGE_NAME:$IMAGE_TAG"
+
+            docker build -t "$IMAGE_NAME:$IMAGE_TAG" "$dir"
+            docker push "$IMAGE_NAME:$IMAGE_TAG"
+          done
