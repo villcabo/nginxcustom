@@ -1,19 +1,32 @@
 name: Build and Push Nginx Images
 
 on:
-  pull_request:
+  push:
+    branches: [main]
     paths:
-      - nginx-logrorate
-      - nginx-logrotate-geoip
+      - nginx-logrotate/**
+      - nginx-logrotate-geoip/**
+  pull_request:
+    branches: [main]
+    paths:
+      - nginx-logrotate/**
+      - nginx-logrotate-geoip/**
   workflow_dispatch:
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [nginx-logrotate, nginx-logrotate-geoip]
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -25,29 +38,68 @@ jobs:
         id: changed_dirs
         run: |
           echo "Detecting changed directories..."
-          CHANGED_DIRS=$(git diff --name-only HEAD^ HEAD | grep Dockerfile | awk -F'/' '{print $1}' | sort -u | xargs)
-          echo "Changed directories: $CHANGED_DIRS"
-          echo "dirs=$CHANGED_DIRS" >> $GITHUB_ENV
-
+          CHANGED_DIRS=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }} | awk -F/ '{print $1}' | sort -u | sed -z 's/\n/,/g;s/^/[/;s/,$/]/;s/$/\n/')
+          echo "Changed directories:"
+          echo "$CHANGED_DIRS"
+          echo "CHANGED_DIR=$CHANGED_DIRS" >> ${GITHUB_ENV}
+      
       - name: Build and Push Docker images
-        if: env.dirs != ''
+        if: contains(env.CHANGED_DIR, matrix.module)
         run: |
-          for dir in ${{ env.dirs }}; do
-            echo "Processing directory: $dir"
+          # Función para imprimir mensajes con formato
+          function log() {
+            echo "[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+          }
 
-            # Extract the Nginx version from the Dockerfile
-            NGINX_VERSION=$(grep -oP '(?<=FROM nginx:)[^ ]+' "$dir/Dockerfile" | head -1)
+          MODULE=${{ matrix.module }}
+          DIR="$MODULE"
 
-            if [[ -z "$NGINX_VERSION" ]]; then
-              echo "No Nginx version found in $dir/Dockerfile, skipping..."
-              continue
-            fi
+          # Verificar si el directorio existe
+          if [[ ! -d "$DIR" ]]; then
+            log "Error: El directorio '$DIR' no existe."
+            exit 1
+          fi
 
-            IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/$dir"
-            IMAGE_TAG="$NGINX_VERSION"
+          log "Iniciando proceso para el módulo: $MODULE"
+          log "Directorio seleccionado: $DIR"
 
-            echo "Building image: $IMAGE_NAME:$IMAGE_TAG"
+          # Cambiar al directorio del módulo
+          cd "$DIR" || { log "Error: No se pudo cambiar al directorio '$DIR'"; exit 1; }
 
-            docker build -t "$IMAGE_NAME:$IMAGE_TAG" "$dir"
-            docker push "$IMAGE_NAME:$IMAGE_TAG"
-          done
+          # Extraer la versión de Nginx del Dockerfile (compatible con formato nginx:<version>-alpine)
+          NGINX_VERSION=$(grep -oP '(?<=FROM nginx:)[^ ]+' "Dockerfile" | head -1)
+
+          if [[ -z "$NGINX_VERSION" ]]; then
+            log "No se encontró una versión de Nginx en el archivo '$DIR/Dockerfile'. Saltando..."
+            exit 1
+          fi
+
+          log "Versión de Nginx detectada: $NGINX_VERSION"
+
+          # Definir el nombre de la imagen y el tag
+          IMAGE_NAME="${{ DOCKER_USERNAME }}/$DIR"
+          IMAGE_TAG="$NGINX_VERSION"
+
+          log "Nombre de la imagen: $IMAGE_NAME"
+          log "Tag de la imagen: $IMAGE_TAG"
+
+          # Construir la imagen de Docker
+          log "Iniciando construcción de la imagen: $IMAGE_NAME:$IMAGE_TAG"
+          if docker build -t "$IMAGE_NAME:$IMAGE_TAG" .; then
+            log "Construcción completada exitosamente."
+          else
+            log "Error: La construcción de la imagen falló."
+            exit 1
+          fi
+
+          # Subir la imagen a Docker Hub
+          log "Subiendo la imagen '$IMAGE_NAME:$IMAGE_TAG' a Docker Hub..."
+          if docker push "$IMAGE_NAME:$IMAGE_TAG"; then
+            log "La imagen se subió correctamente."
+          else
+            log "Error: No se pudo subir la imagen a Docker Hub."
+            exit 1
+          fi
+
+          log "Proceso completado para el módulo: $MODULE"
+
