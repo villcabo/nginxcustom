@@ -19,5 +19,5 @@ echo "🕒 Starting cron daemon..."
 crond -L /var/log/cron.log
 
 # Start Nginx in the foreground
-echo "🚀 Starting Nginx + LogRotate..."
+echo "🚀 Starting (Nginx + LogRotate) Alpine..."
 nginx -g "daemon off;"
