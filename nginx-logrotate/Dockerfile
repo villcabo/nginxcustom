@@ -1,5 +1,7 @@
 FROM nginx:1.28-alpine-slim
 
+LABEL maintainer="Bismarck Villca Soliz <bismarck.villca@gmail.com>"
+
 # Instalar dependencias
 RUN apk add --no-cache logrotate
 
