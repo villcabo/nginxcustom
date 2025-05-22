@@ -1,11 +1,9 @@
-FROM nginx:1.26-alpine
+FROM nginx:1.28-alpine-slim
 
-# Install logrotate
-RUN apk add --no-cache logrotate
+# Instalar dependencias
+RUN apk add --no-cache logrotate geoip
 
-# Copy the initialization script
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# Copiar configuración de logrotate
+COPY logrotate.conf /etc/logrotate.conf
 
-# Replace the entrypoint with a custom script
-ENTRYPOINT ["/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]
