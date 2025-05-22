@@ -47,7 +47,7 @@ log "Tag de la imagen: $IMAGE_TAG"
 
 # Construir la imagen de Docker
 log "Iniciando construcción de la imagen: $IMAGE_NAME:$IMAGE_TAG"
-if docker build -t "$IMAGE_NAME:$IMAGE_TAG" .; then
+if docker build --no-cache -t "$IMAGE_NAME:$IMAGE_TAG" .; then
   log "Construcción completada exitosamente."
 else
   log "Error: La construcción de la imagen falló."
