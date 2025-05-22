@@ -40,7 +40,7 @@ log "Versión de Nginx detectada: $NGINX_VERSION"
 
 # Definir el nombre de la imagen y el tag
 IMAGE_NAME="${DOCKER_USERNAME:-$USER}/$DIR"
-IMAGE_TAG="$NGINX_VERSION"
+IMAGE_TAG="$NGINX_VERSION-beta"
 
 log "Nombre de la imagen: $IMAGE_NAME"
 log "Tag de la imagen: $IMAGE_TAG"
