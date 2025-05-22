@@ -2,11 +2,15 @@
 
 set -e
 
-echo "🔍 Validating NGINX configuration..."
+echo "---------------------------------------------------------------"
+echo "$(nginx -V)"
+echo "---------------------------------------------------------------"
+
+echo "🔍 Validating Nginx configuration..."
 if nginx -t; then
-    echo "✅ NGINX config is valid."
+    echo "✅ Nginx config is valid."
 else
-    echo "❌ NGINX config has errors. Exiting..."
+    echo "❌ Nginx config has errors. Exiting..."
     exit 1
 fi
 
@@ -14,6 +18,6 @@ fi
 echo "🕒 Starting cron daemon..."
 crond -L /var/log/cron.log
 
-# Start NGINX in the foreground
-echo "🚀 Starting NGINX..."
+# Start Nginx in the foreground
+echo "🚀 Starting Nginx + LogRotate..."
 nginx -g "daemon off;"

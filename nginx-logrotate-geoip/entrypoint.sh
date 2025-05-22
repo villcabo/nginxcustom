@@ -1,19 +1,37 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
-echo "🔍 Validating NGINX configuration..."
+echo "---------------------------------------------------------------"
+echo "$(nginx -V)"
+echo "---------------------------------------------------------------"
+
+echo "🔍 Validating Nginx configuration..."
 if nginx -t; then
-    echo "✅ NGINX config is valid."
+    echo "✅ Nginx config is valid."
 else
-    echo "❌ NGINX config has errors. Exiting..."
+    echo "❌ Nginx config has errors. Exiting..."
     exit 1
 fi
 
-# Start cron daemon
+# Start cron daemon (Debian uses 'cron' instead of 'crond')
 echo "🕒 Starting cron daemon..."
-crond -L /var/log/cron.log
+service cron start
 
-# Start NGINX in the foreground
-echo "🚀 Starting NGINX..."
-nginx -g "daemon off;"
+# Function to handle shutdown gracefully
+cleanup() {
+    echo "🛑 Shutting down services..."
+    service cron stop
+    nginx -s quit
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGTERM SIGINT
+
+# Start Nginx in the foreground
+echo "🚀 Starting (Nginx + LogRotate + GeoIP) in Debian Bookworm..."
+nginx -g "daemon off;" &
+
+# Keep the script running and wait for signals
+wait $!

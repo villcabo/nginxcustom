@@ -8,13 +8,19 @@ function log() {
 # Check if an argument was provided
 if [[ -z "$1" ]]; then
   log "Error: You must specify a module as an argument."
-  log "Usage: bash build.sh <module>"
+  log "Usage: bash build.sh <module> [-nc|--no-cache]"
   exit 1
 fi
 
 # Get the module name and determine the corresponding directory
 MODULE=$1
 DIR="nginx-$MODULE"
+
+# Parse optional flags
+NO_CACHE_FLAG=""
+if [[ "$2" == "-nc" || "$2" == "--no-cache" ]]; then
+  NO_CACHE_FLAG="--no-cache"
+fi
 
 # Check if the directory exists
 if [[ ! -d "$DIR" ]]; then
@@ -47,7 +53,7 @@ log "Image tag: $IMAGE_TAG"
 
 # Build the Docker image
 log "Starting build for image: $IMAGE_NAME:$IMAGE_TAG"
-if docker build --no-cache -t "$IMAGE_NAME:$IMAGE_TAG" .; then
+if docker build $NO_CACHE_FLAG -t "$IMAGE_NAME:$IMAGE_TAG" .; then
   log "Build completed successfully."
 else
   log "Error: Image build failed."
