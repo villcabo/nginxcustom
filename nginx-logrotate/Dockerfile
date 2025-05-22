@@ -2,21 +2,21 @@ FROM nginx:1.28-alpine-slim
 
 LABEL maintainer="Bismarck Villca Soliz <bismarck.villca@gmail.com>"
 
-# Instalar dependencias
+# Install dependencies
 RUN apk add --no-cache logrotate
 
-# Copiar configuración de logrotate
+# Copy logrotate configuration
 COPY logrotate.conf /etc/logrotate.d/nginx
 RUN chmod 0644 /etc/logrotate.d/nginx
 
-# Copiar entrypoint.sh
+# Copy entrypoint.sh
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Cron para ejecutar logrotate cada 6 horas
+# Cron to run logrotate every 6 hours
 RUN echo "0 */6 * * * /usr/sbin/logrotate -vf /etc/logrotate.d/nginx" > /etc/crontabs/root
 
-# Crear el directorio de logs para cron
+# Create log directory for cron
 RUN mkdir -p /var/log/cron
 
 ENTRYPOINT [ "/entrypoint.sh" ]
