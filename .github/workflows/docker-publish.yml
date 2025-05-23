@@ -76,9 +76,15 @@ jobs:
 
           log "Detected Nginx version: $NGINX_VERSION"
 
+          # Set tag suffix for pull_request
+          TAG_SUFFIX=""
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            TAG_SUFFIX="-beta"
+          fi
+
           # Define the image name and tag
           IMAGE_NAME="${{ secrets.DOCKER_USERNAME }}/$DIR"
-          IMAGE_TAG="$NGINX_VERSION"
+          IMAGE_TAG="$NGINX_VERSION$TAG_SUFFIX"
 
           log "Image name: $IMAGE_NAME"
           log "Image tag: $IMAGE_TAG"
