@@ -1,10 +1,37 @@
-#!/bin/sh
+#!/bin/bash
 
-# Create the crontab file for logrotate
-echo "0 0 * * * /usr/sbin/logrotate /etc/logrotate.d/nginx" > /etc/crontabs/root
+set -e
 
-# Start crond
-crond
+echo "---------------------------------------------------------------"
+echo "$(nginx -V)"
+echo "---------------------------------------------------------------"
 
-# Start Nginx
-nginx -g "daemon off;"
+echo "🔍 Validating Nginx configuration..."
+if nginx -t; then
+    echo "✅ Nginx config is valid."
+else
+    echo "❌ Nginx config has errors. Exiting..."
+    exit 1
+fi
+
+# Start cron daemon (Debian uses 'cron' instead of 'crond')
+echo "🕒 Starting cron daemon..."
+service cron start
+
+# Function to handle shutdown gracefully
+cleanup() {
+    echo "🛑 Shutting down services..."
+    service cron stop
+    nginx -s quit
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGTERM SIGINT
+
+# Start Nginx in the foreground
+echo "🚀 Starting (Nginx + LogRotate + GeoIP) in Debian Bookworm..."
+nginx -g "daemon off;" &
+
+# Keep the script running and wait for signals
+wait $!

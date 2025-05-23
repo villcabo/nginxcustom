@@ -1,10 +1,23 @@
 #!/bin/sh
 
-# Create the crontab file for logrotate
-echo "0 0 * * * /usr/sbin/logrotate /etc/logrotate.d/nginx" > /etc/crontabs/root
+set -e
 
-# Start crond
-crond
+echo "---------------------------------------------------------------"
+echo "$(nginx -V)"
+echo "---------------------------------------------------------------"
 
-# Start Nginx
+echo "🔍 Validating Nginx configuration..."
+if nginx -t; then
+    echo "✅ Nginx config is valid."
+else
+    echo "❌ Nginx config has errors. Exiting..."
+    exit 1
+fi
+
+# Start cron daemon
+echo "🕒 Starting cron daemon..."
+crond -L /var/log/cron.log
+
+# Start Nginx in the foreground
+echo "🚀 Starting (Nginx + LogRotate) Alpine..."
 nginx -g "daemon off;"
