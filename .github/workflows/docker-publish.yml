@@ -41,13 +41,14 @@ jobs:
           # Use different git diff base for push and pull_request events
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             CHANGED_DIRS=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }} | awk -F/ '{print $1}' | sort -u | sed -z 's/\n/,/g;s/^/[/;s/,$/]/;s/$/\n/')
+            echo "Changed directories:"
+            echo "$CHANGED_DIRS"
+            echo "CHANGED_DIR=$CHANGED_DIRS" >> ${GITHUB_ENV}
           else
-            # For push, compare with previous commit
-            CHANGED_DIRS=$(git diff --name-only ${{ github.sha }}^ ${{ github.sha }} | awk -F/ '{print $1}' | sort -u | sed -z 's/\n/,/g;s/^/[/;s/,$/]/;s/$/\n/')
+            # For push, always build all modules
+            echo "Building all modules on push to main."
+            echo "CHANGED_DIR=[nginx-logrotate,nginx-logrotate-geoip]" >> ${GITHUB_ENV}
           fi
-          echo "Changed directories:"
-          echo "$CHANGED_DIRS"
-          echo "CHANGED_DIR=$CHANGED_DIRS" >> ${GITHUB_ENV}
       
       - name: Build and Push Docker images
         if: contains(env.CHANGED_DIR, matrix.module)
