@@ -38,7 +38,13 @@ jobs:
         id: changed_dirs
         run: |
           echo "Detecting changed directories..."
-          CHANGED_DIRS=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }} | awk -F/ '{print $1}' | sort -u | sed -z 's/\n/,/g;s/^/[/;s/,$/]/;s/$/\n/')
+          # Use different git diff base for push and pull_request events
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            CHANGED_DIRS=$(git diff --name-only origin/${{ github.event.pull_request.base.ref }}...${{ github.event.pull_request.head.sha }} | awk -F/ '{print $1}' | sort -u | sed -z 's/\n/,/g;s/^/[/;s/,$/]/;s/$/\n/')
+          else
+            # For push, compare with previous commit
+            CHANGED_DIRS=$(git diff --name-only ${{ github.sha }}^ ${{ github.sha }} | awk -F/ '{print $1}' | sort -u | sed -z 's/\n/,/g;s/^/[/;s/,$/]/;s/$/\n/')
+          fi
           echo "Changed directories:"
           echo "$CHANGED_DIRS"
           echo "CHANGED_DIR=$CHANGED_DIRS" >> ${GITHUB_ENV}
