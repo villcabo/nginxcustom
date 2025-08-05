@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 
@@ -14,10 +14,24 @@ else
     exit 1
 fi
 
-# Start cron daemon
+# Start cron daemon (Debian uses 'cron' instead of 'crond')
 echo "Starting cron daemon..."
-crond -L /var/log/cron.log
+service cron start
+
+# Function to handle shutdown gracefully
+cleanup() {
+    echo "Shutting down services..."
+    service cron stop
+    nginx -s quit
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGTERM SIGINT
 
 # Start Nginx in the foreground
-echo "Starting (Nginx + LogRotate + GeoIP2) Alpine..."
-nginx -g "daemon off;"
+echo "Starting (Nginx + LogRotate + GeoIP) in Debian Bookworm..."
+nginx -g "daemon off;" &
+
+# Keep the script running and wait for signals
+wait $!
