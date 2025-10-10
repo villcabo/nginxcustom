@@ -1,4 +1,4 @@
-FROM nginx:1.28-alpine-slim
+FROM nginx:1.29-alpine
 
 LABEL maintainer="Bismarck Villca Soliz <bismarck.villca@gmail.com>"
 

@@ -1,4 +1,4 @@
-FROM nginx:1.28-bookworm
+FROM nginx:1.29-bookworm
 
 LABEL maintainer="Bismarck Villca Soliz <bismarck.villca@gmail.com>"
 
@@ -21,9 +21,9 @@ RUN wget https://github.com/leev/ngx_http_geoip2_module/archive/refs/heads/maste
 
 # Download Nginx source code for compilation
 WORKDIR /usr/local/src
-RUN wget https://nginx.org/download/nginx-1.28.0.tar.gz \
-    && tar -xvzf nginx-1.28.0.tar.gz \
-    && mv nginx-1.28.0 nginx-src
+RUN wget https://nginx.org/download/nginx-1.29.0.tar.gz \
+    && tar -xvzf nginx-1.29.0.tar.gz \
+    && mv nginx-1.29.0 nginx-src
 
 # Build GeoIP2 modules with Nginx
 WORKDIR /usr/local/src/nginx-src
