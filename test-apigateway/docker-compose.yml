@@ -1,0 +1,38 @@
+services:
+  gateway:
+    build:
+      context: ../openresty-apigateway
+    container_name: apigw-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+    depends_on:
+      - backend1
+      - backend2
+    networks:
+      - apigw
+
+  backend1:
+    build:
+      context: ./backend
+    container_name: apigw-backend1
+    environment:
+      BACKEND_ID: backend1
+      STARTUP_DELAY: "0"
+    networks:
+      - apigw
+
+  backend2:
+    build:
+      context: ./backend
+    container_name: apigw-backend2
+    environment:
+      BACKEND_ID: backend2
+      STARTUP_DELAY: "0"
+    networks:
+      - apigw
+
+networks:
+  apigw:
+    driver: bridge

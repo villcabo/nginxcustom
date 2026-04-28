@@ -68,11 +68,13 @@ function show_help() {
   echo -e "${BOLD}EXAMPLES:${NC}"
   echo -e "  ${GREEN}./$0${NC} ${YELLOW}logrotate${NC}"
   echo -e "  ${GREEN}./$0${NC} ${YELLOW}logrotate-geoip${NC} ${BLUE}--no-cache${NC}"
+  echo -e "  ${GREEN}./$0${NC} ${YELLOW}apigateway${NC}"
   echo -e "  ${GREEN}./$0${NC} ${YELLOW}logrotate${NC} ${BLUE}-nc${NC}\n"
-  
+
   echo -e "${BOLD}AVAILABLE MODULES:${NC}"
-  echo -e "  ${GREEN}▶${NC} logrotate"
-  echo -e "  ${GREEN}▶${NC} logrotate-geoip\n"
+  echo -e "  ${GREEN}▶${NC} logrotate           ${BLUE}(nginx-logrotate)${NC}"
+  echo -e "  ${GREEN}▶${NC} logrotate-geoip     ${BLUE}(nginx-logrotate-geoip)${NC}"
+  echo -e "  ${GREEN}▶${NC} apigateway          ${BLUE}(openresty-apigateway)${NC}\n"
 }
 
 # Function to parse command line arguments
@@ -114,32 +116,41 @@ function parse_arguments() {
   fi
 }
 
-# Function to validate module directory
+# Function to validate module directory.
+# Tries openresty-<module> first, then nginx-<module>, so a module name
+# can map to either base image family.
 function validate_module() {
   local module="$1"
-  local dir="nginx-$module"
-  
-  if [[ ! -d "$dir" ]]; then
-    print_error "The directory '$dir' does not exist."
-    exit 1
-  fi
-  
-  echo "$dir"
+  local candidates=("openresty-$module" "nginx-$module")
+
+  for dir in "${candidates[@]}"; do
+    if [[ -d "$dir" ]]; then
+      echo "$dir"
+      return 0
+    fi
+  done
+
+  print_error "No directory found for module '$module' (tried: ${candidates[*]})."
+  exit 1
 }
 
-# Function to extract Nginx version from Dockerfile
+# Function to extract base image version from Dockerfile.
+# Supports both `FROM nginx:<tag>` and `FROM openresty/openresty:<tag>`.
 function get_nginx_version() {
   local dockerfile="$1/Dockerfile"
-  local nginx_version
-  
-  nginx_version=$(grep -oP '(?<=FROM nginx:)[^ ]+' "$dockerfile" | head -1)
-  
-  if [[ -z "$nginx_version" ]]; then
-    print_error "No Nginx version found in file '$dockerfile'. Skipping..."
+  local version
+
+  version=$(grep -oP '(?<=FROM nginx:)[^ ]+' "$dockerfile" | head -1)
+  if [[ -z "$version" ]]; then
+    version=$(grep -oP '(?<=FROM openresty/openresty:)[^ ]+' "$dockerfile" | head -1)
+  fi
+
+  if [[ -z "$version" ]]; then
+    print_error "No base image version found in '$dockerfile'. Skipping..."
     exit 1
   fi
-  
-  echo "$nginx_version"
+
+  echo "$version"
 }
 
 # Function to build Docker image
@@ -175,7 +186,7 @@ function build_image() {
   echo -e "    ${BLUE}→${NC} Registry: ${GREEN}$image_name${NC}"
   echo -e "    ${BLUE}→${NC} Tag: ${GREEN}$image_tag${NC}"
   echo
-  echo -e "${BOLD}Docker Command:${NC} ${BLUE}docker build $no_cache_flag -t $image_name:$image_tag .${NC}"
+  echo -e "${BOLD}Docker Command:${NC} ${BLUE}docker buildx build $no_cache_flag --platform linux/amd64,linux/arm64 -t $image_name:$image_tag .${NC}"
   echo
   if ! confirm_action "Continue with build?"; then
     exit 0
@@ -184,7 +195,7 @@ function build_image() {
   
   print_action "Starting build for image: $image_name:$image_tag"
   
-  if docker build $no_cache_flag -t "$image_name:$image_tag" .; then
+  if docker buildx build $no_cache_flag --platform linux/amd64,linux/arm64 -t "$image_name:$image_tag" .; then
     print_success "Build completed successfully."
   else
     print_error "Image build failed."

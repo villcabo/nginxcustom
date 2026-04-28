@@ -1,0 +1,17 @@
+server {
+    listen 8080;
+    server_name _;
+
+    # Health endpoint — what the gateway probes every 2s.
+    location = /health {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "OK\n";
+    }
+
+    # Root returns identity so we can tell which backend answered.
+    location / {
+        default_type application/json;
+        return 200 '{"backend":"__BACKEND_ID__","host":"$hostname"}\n';
+    }
+}

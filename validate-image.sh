@@ -42,7 +42,7 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
     server {
-        listen 80;
+        listen 8080;
         location / {
             return 200 'Modules loaded successfully';
         }

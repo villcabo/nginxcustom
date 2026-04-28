@@ -14,10 +14,20 @@ else
     exit 1
 fi
 
-# Start cron daemon
-echo "Starting cron daemon..."
-crond -L /var/log/cron.log
+# Apply runtime overrides to logrotate config
+LOGROTATE_MAXSIZE="${LOGROTATE_MAXSIZE:-1G}"
+sed -i "s|^[[:space:]]*maxsize .*|    maxsize ${LOGROTATE_MAXSIZE}|" /etc/logrotate.d/nginx
+
+# Start background logrotate loop
+LOGROTATE_DELAY_SECONDS="${LOGROTATE_DELAY_SECONDS:-3600}"
+echo "Starting logrotate loop (every ${LOGROTATE_DELAY_SECONDS}s, maxsize=${LOGROTATE_MAXSIZE})..."
+(
+  while true; do
+    sleep "$LOGROTATE_DELAY_SECONDS"
+    /usr/sbin/logrotate -vf /etc/logrotate.d/nginx
+  done
+) &
 
 # Start Nginx in the foreground
 echo "Starting (Nginx + LogRotate) Alpine..."
-nginx -g "daemon off;"
+exec nginx -g "daemon off;"

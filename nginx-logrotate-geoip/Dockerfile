@@ -10,6 +10,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     libpcre3 \
     zlib1g \
     logrotate \
+    wget \
     # Build dependencies (will be removed)
     build-essential \
     libpcre3-dev \
@@ -57,13 +58,17 @@ COPY nginx-modules.conf /etc/nginx/conf.d/modules-example.conf
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Setup cron for logrotate every 6 hours
-RUN echo "0 */6 * * * root /usr/sbin/logrotate -vf /etc/logrotate.d/nginx" >> /etc/crontab
+# Add Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null http://localhost:8080/ || exit 1
 
-# Create log directory for cron
-RUN mkdir -p /var/log/cron
+# Configure Nginx for non-root execution
+RUN sed -i 's/listen       80;/listen       8080;/g' /etc/nginx/conf.d/default.conf && \
+    sed -i 's/user  nginx;//g' /etc/nginx/nginx.conf && \
+    sed -i 's/pid        \/var\/run\/nginx.pid;/pid        \/tmp\/nginx.pid;/g' /etc/nginx/nginx.conf && \
+    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d /etc/logrotate.d && \
+    touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid /tmp
 
-# Ensure cron service can run
-RUN touch /var/log/cron.log
+USER nginx
 
 ENTRYPOINT [ "/entrypoint.sh" ]

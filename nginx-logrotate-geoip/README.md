@@ -14,8 +14,16 @@ This Docker image includes Nginx compiled with the following dynamic modules:
 - `ngx_http_brotli_static_module.so` - Serve pre-compressed .br files
 
 ### 📝 LogRotate
-- Automatic log rotation every 6 hours
+- Automatic log rotation: daily, plus whenever a log exceeds `LOGROTATE_MAXSIZE`
+- Configurable via env vars (see below)
 - Prevents log files from growing too large
+
+#### Environment Variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `LOGROTATE_DELAY_SECONDS` | `3600` | Seconds between logrotate runs. |
+| `LOGROTATE_MAXSIZE` | `1G` | Max size before intra-day rotation. Accepts `k`/`M`/`G` (e.g. `500M`, `2G`). |
 
 ## Usage
 

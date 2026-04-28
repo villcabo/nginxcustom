@@ -36,14 +36,23 @@ else
     exit 1
 fi
 
-# Start cron daemon (Debian uses 'cron' instead of 'crond')
-echo "Starting cron daemon..."
-service cron start
+# Apply runtime overrides to logrotate config
+LOGROTATE_MAXSIZE="${LOGROTATE_MAXSIZE:-1G}"
+sed -i "s|^[[:space:]]*maxsize .*|    maxsize ${LOGROTATE_MAXSIZE}|" /etc/logrotate.d/nginx
+
+# Start background logrotate loop
+LOGROTATE_DELAY_SECONDS="${LOGROTATE_DELAY_SECONDS:-3600}"
+echo "Starting logrotate loop (every ${LOGROTATE_DELAY_SECONDS}s, maxsize=${LOGROTATE_MAXSIZE})..."
+(
+  while true; do
+    sleep "$LOGROTATE_DELAY_SECONDS"
+    /usr/sbin/logrotate -vf /etc/logrotate.d/nginx
+  done
+) &
 
 # Function to handle shutdown gracefully
 cleanup() {
     echo "Shutting down services..."
-    service cron stop
     nginx -s quit
     exit 0
 }

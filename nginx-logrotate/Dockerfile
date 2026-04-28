@@ -13,10 +13,17 @@ RUN chmod 0644 /etc/logrotate.d/nginx
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Cron to run logrotate every 6 hours
-RUN echo "0 */6 * * * /usr/sbin/logrotate -vf /etc/logrotate.d/nginx" > /etc/crontabs/root
+# Add Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null http://localhost:8080/ || exit 1
 
-# Create log directory for cron
-RUN mkdir -p /var/log/cron
+# Configure Nginx for non-root execution
+RUN sed -i 's/listen       80;/listen       8080;/g' /etc/nginx/conf.d/default.conf && \
+    sed -i 's/user  nginx;//g' /etc/nginx/nginx.conf && \
+    sed -i 's/pid        \/var\/run\/nginx.pid;/pid        \/tmp\/nginx.pid;/g' /etc/nginx/nginx.conf && \
+    chown -R nginx:nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d /etc/logrotate.d && \
+    touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid /tmp
+
+USER nginx
 
 ENTRYPOINT [ "/entrypoint.sh" ]
