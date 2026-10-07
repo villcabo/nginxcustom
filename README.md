@@ -28,7 +28,7 @@ docker build -t nginx-logrotate ./nginx-logrotate
 
 ```bash
 docker run -d --name nginx-logrotate -p 8080:8080 \
-  -e LOGROTATE_DELAY_SECONDS=3600 \
+  -e LOGROTATE_FREQUENCY=daily \
   -e LOGROTATE_MAXSIZE=1G \
   nginx-logrotate
 ```
@@ -47,7 +47,7 @@ docker build -t nginx-logrotate-geoip ./nginx-logrotate-geoip
 
 ```bash
 docker run -d --name nginx-logrotate-geoip -p 8080:8080 \
-  -e LOGROTATE_DELAY_SECONDS=3600 \
+  -e LOGROTATE_FREQUENCY=daily \
   -e LOGROTATE_MAXSIZE=1G \
   nginx-logrotate-geoip
 ```
@@ -82,8 +82,14 @@ It has its own environment variables (log rotation by schedule or by size, confi
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `LOGROTATE_DELAY_SECONDS` | `3600` | Interval (in seconds) at which logrotate runs in the background. Lower values give finer-grained intra-day rotation. |
-| `LOGROTATE_MAXSIZE` | `1G` | Maximum size a log file can reach before being rotated within the same day. Accepts logrotate suffixes: `k`, `M`, `G` (e.g. `500M`, `2G`). Combined with `daily`, this means logs always rotate at least once per day, and additionally whenever a file exceeds this size. |
+| `LOGROTATE_FREQUENCY` | `daily` | `hourly`, `daily`, `weekly`, `monthly` — rotate on that schedule — or `size` to rotate only by size. |
+| `LOGROTATE_MAXSIZE` | `1G` | With a schedule: also rotate early when a file exceeds it (set it empty to disable). With `size`: the only trigger. Accepts `k`/`M`/`G` (e.g. `500M`, `2G`). |
+| `LOGROTATE_ROTATE` | `180` | Rotated files to keep per log. |
+| `LOGROTATE_COMPRESS` | `true` | Gzip rotated files (the newest one stays uncompressed one cycle). |
+| `LOGROTATE_DELAY_SECONDS` | `300` | How often logrotate checks whether a rotation is due. It never forces one, so keep it well below the smallest trigger. |
+| `LOGROTATE_STATE_FILE` | `/var/log/nginx/.logrotate.status` | Rotation state; lives with the logs so schedules survive restarts. |
+
+The config is generated at startup; invalid values stop the container with a clear error. In the official nginx base images `/var/log/nginx/*.log` are symlinks to stdout/stderr, so there is only something to rotate when `/var/log/nginx` is a mounted volume.
 
 ## Customization
 

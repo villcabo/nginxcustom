@@ -46,10 +46,6 @@ RUN wget https://github.com/leev/ngx_http_geoip2_module/archive/refs/heads/maste
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy logrotate configuration
-COPY logrotate.conf /etc/logrotate.d/nginx
-RUN chmod 0644 /etc/logrotate.d/nginx
-
 # Reference config for the dynamic modules, kept outside conf.d so it is never auto-included
 COPY nginx-modules.conf /etc/nginx/examples/modules.conf
 

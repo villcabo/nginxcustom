@@ -80,11 +80,6 @@ docker run --rm --entrypoint="" "$IMAGE" sh -c "
     else
         echo '      ❌ examples/modules.conf faltante'
     fi
-    if [ -f '/etc/logrotate.d/nginx' ]; then
-        echo '      ✅ logrotate.conf'
-    else
-        echo '      ❌ logrotate.conf faltante'
-    fi
 "
 
 # 6. Verificar versión de nginx
@@ -109,6 +104,11 @@ else
     docker logs "$CONTAINER" 2>&1 | tail -10 | sed 's/^/      /'
     docker rm -f "$CONTAINER" > /dev/null
     exit 1
+fi
+if docker exec "$CONTAINER" grep -q 'rotate ' /etc/logrotate.d/nginx; then
+    echo "   ✅ Configuración de logrotate generada al arrancar"
+else
+    echo "   ❌ Falta /etc/logrotate.d/nginx"
 fi
 docker rm -f "$CONTAINER" > /dev/null
 

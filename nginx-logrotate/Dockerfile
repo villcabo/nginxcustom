@@ -5,10 +5,6 @@ LABEL maintainer="Bismarck Villca Soliz <bismarck.villca@gmail.com>"
 # Install dependencies
 RUN apk add --no-cache logrotate
 
-# Copy logrotate configuration
-COPY logrotate.conf /etc/logrotate.d/nginx
-RUN chmod 0644 /etc/logrotate.d/nginx
-
 # Copy entrypoint.sh
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

@@ -10,7 +10,7 @@ Three custom Docker images:
 - `nginx-logrotate-geoip/` — Nginx + logrotate + dynamic modules (GeoIP2, Brotli filter, Brotli static) on Debian Trixie (nginx no longer publishes bookworm tags). Modules are compiled from source against the matching nginx source tarball.
 - `openresty-apigateway/` — File-driven API gateway on OpenResty (nginx + LuaJIT), Debian Bookworm. No GeoIP (dropped on purpose), Brotli only. The image owns `nginx.conf`; users mount `/etc/nginx/conf.d` (routes, upstreams, `healthchecks.json`), which is hot-reloaded. DNS-based discovery via `server ... resolve`, active health checks, JSON logs/errors, Prometheus on `:8081`.
 
-All three images run as the non-root `nginx` user and listen on `8080`. The two nginx images share the same logrotate setup and env vars; the gateway has its own (see `openresty-apigateway/README.md`).
+All three images run as the non-root `nginx` user, listen on `8080`, and generate their logrotate config from the same `LOGROTATE_*` env vars (the gateway keeps 30 files by default, the nginx images 180).
 
 ## Common commands
 
@@ -33,7 +33,7 @@ Validate a built geoip image (checks module files load, runtime libs present, co
 Run a built image:
 
 ```bash
-docker run -d -p 8080:8080 -e LOGROTATE_DELAY_SECONDS=3600 <image>
+docker run -d -p 8080:8080 -e LOGROTATE_FREQUENCY=daily -e LOGROTATE_MAXSIZE=1G <image>
 ```
 
 ## Architecture notes
@@ -44,15 +44,9 @@ docker run -d -p 8080:8080 -e LOGROTATE_DELAY_SECONDS=3600 <image>
 
 **Tag derivation.** Both `build.sh` and `.github/workflows/docker-publish.yml` parse the tag from the `FROM` line — first trying `nginx:<tag>`, falling back to `openresty/openresty:<tag>`. Whatever follows the colon becomes the image tag (e.g. `1.31-alpine`, `1.31.6-trixie`, `1.31.1.1-bookworm-fat`). CI appends `-beta` only on pull requests; local builds always append `-beta`.
 
-**Non-root hardening (nginx images).** Default listen port is rewritten `80 → 8080`, the `user nginx;` directive is stripped from `nginx.conf`, the pid line is rewritten to `/tmp/nginx.pid` with a regex (`s|^pid .*|...|`) because the upstream path changes between releases (1.31 uses `/run/nginx.pid`; a literal-path sed silently no-ops and nginx then cannot start as non-root), and ownership of cache/log/conf/logrotate dirs is handed to `nginx`. The healthcheck hits `http://127.0.0.1:8080/` — NOT `localhost`, which resolves to `::1` only inside these containers while nginx listens on IPv4. The healthcheck needs `wget` at runtime: never purge it with the build deps. Logrotate `postrotate` must signal `/tmp/nginx.pid`.
+**Non-root hardening (nginx images).** Default listen port is rewritten `80 → 8080`, the `user nginx;` directive is stripped from `nginx.conf`, the pid line is rewritten to `/tmp/nginx.pid` with a regex (`s|^pid .*|...|`) because the upstream path changes between releases (1.31 uses `/run/nginx.pid`; a literal-path sed silently no-ops and nginx then cannot start as non-root), and ownership of cache/log/conf/logrotate dirs is handed to `nginx`. The healthcheck hits `http://127.0.0.1:8080/` — NOT `localhost`, which resolves to `::1` only inside these containers while nginx listens on IPv4. The healthcheck needs `wget` at runtime: never purge it with the build deps. Logrotate `postrotate` must signal `/tmp/nginx.pid`. The geoip entrypoint (bash as PID 1) must trap `SIGQUIT`, the image `STOPSIGNAL`: without it `docker stop` waits the full grace period and SIGKILLs nginx (measured: 10.3s, exit 137).
 
-**Logrotate runs in-process, not via cron.** `entrypoint.sh` backgrounds a `while true; do sleep $LOGROTATE_DELAY_SECONDS; logrotate ...; done` loop. There is no cron daemon. Known issue in the two nginx images: they still call `logrotate -vf`, and `-f` forces a rotation on every loop regardless of `daily`/`maxsize`. The gateway fixes it (no `-f`, state file via `-s`, config generated from `LOGROTATE_FREQUENCY`/`LOGROTATE_MAXSIZE`/`LOGROTATE_ROTATE`/`LOGROTATE_COMPRESS`). The geoip entrypoint additionally traps SIGTERM/SIGINT for graceful `nginx -s quit`; the alpine entrypoint does not.
-
-**Runtime-tunable logrotate via env vars (nginx images).** Both nginx entrypoints `sed`-patch `/etc/logrotate.d/nginx` on startup using:
-- `LOGROTATE_DELAY_SECONDS` (default `3600`) — sleep between rotation runs.
-- `LOGROTATE_MAXSIZE` (default `1G`) — replaces the `maxsize` line in the config. Combined with `daily`, this gives "rotate at least once a day, and again whenever the file exceeds this size."
-
-The `sed` works from the non-root `nginx` user because `/etc/logrotate.d` is chowneed to `nginx` in the Dockerfile. If you add more tunables, follow the same pattern (env var → `sed` line replace) and document defaults in both `README.md` and `nginx-logrotate-geoip/README.md`.
+**Logrotate runs in-process, not via cron.** Each `entrypoint.sh` renders `/etc/logrotate.d/nginx` at startup from `LOGROTATE_FREQUENCY` (`hourly|daily|weekly|monthly|size`), `LOGROTATE_MAXSIZE`, `LOGROTATE_ROTATE` and `LOGROTATE_COMPRESS`, then backgrounds a loop that runs `logrotate -s $LOGROTATE_STATE_FILE` every `LOGROTATE_DELAY_SECONDS`. Never pass `-f`: it forces a rotation on every loop and silently ignores the schedule and size (that was the behavior up to 1.29). The state file lives in `/var/log/nginx` so schedules survive restarts. `${LOGROTATE_MAXSIZE-1G}` deliberately has no colon: an empty value disables early rotation. The alpine entrypoint is busybox `sh`, so the rendering code is POSIX and kept identical in both nginx images; `/etc/logrotate.d` is chowned to `nginx` so the non-root user can write it. If you add a tunable, add it to all three entrypoints and to the READMEs.
 
 **GeoIP2 + Brotli are dynamic modules, not loaded by default (geoip image).** They are compiled into `/etc/nginx/modules/` and require explicit `load_module` directives. The reference config is shipped at `/etc/nginx/examples/modules.conf` — never under `conf.d/`, which the stock `nginx.conf` includes inside `http {}`, where `load_module` is a fatal error. The gateway loads Brotli itself in its own `nginx.conf`.
 

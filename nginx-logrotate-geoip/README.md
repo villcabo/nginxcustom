@@ -14,7 +14,7 @@ This Docker image includes Nginx compiled with the following dynamic modules:
 - `ngx_http_brotli_static_module.so` - Serve pre-compressed .br files
 
 ### 📝 LogRotate
-- Automatic log rotation: daily, plus whenever a log exceeds `LOGROTATE_MAXSIZE`
+- Automatic log rotation by schedule (hourly to monthly), by size, or both
 - Configurable via env vars (see below)
 - Prevents log files from growing too large
 
@@ -22,8 +22,14 @@ This Docker image includes Nginx compiled with the following dynamic modules:
 
 | Variable | Default | Description |
 | --- | --- | --- |
-| `LOGROTATE_DELAY_SECONDS` | `3600` | Seconds between logrotate runs. |
-| `LOGROTATE_MAXSIZE` | `1G` | Max size before intra-day rotation. Accepts `k`/`M`/`G` (e.g. `500M`, `2G`). |
+| `LOGROTATE_FREQUENCY` | `daily` | `hourly`, `daily`, `weekly`, `monthly` — rotate on that schedule — or `size` to rotate only by size. |
+| `LOGROTATE_MAXSIZE` | `1G` | With a schedule: also rotate early when a file exceeds it (set it empty to disable). With `size`: the only trigger. Accepts `k`/`M`/`G` (e.g. `500M`, `2G`). |
+| `LOGROTATE_ROTATE` | `180` | Rotated files to keep per log. |
+| `LOGROTATE_COMPRESS` | `true` | Gzip rotated files (the newest one stays uncompressed one cycle). |
+| `LOGROTATE_DELAY_SECONDS` | `300` | How often logrotate checks whether a rotation is due. It never forces one, so keep it well below the smallest trigger. |
+| `LOGROTATE_STATE_FILE` | `/var/log/nginx/.logrotate.status` | Rotation state; lives with the logs so schedules survive restarts. |
+
+The config is generated at startup; invalid values stop the container with a clear error. In the official nginx base images `/var/log/nginx/*.log` are symlinks to stdout/stderr, so there is only something to rotate when `/var/log/nginx` is a mounted volume.
 
 ## Usage
 
