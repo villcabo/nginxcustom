@@ -42,7 +42,7 @@ http {
     include /etc/nginx/mime.types;
     default_type application/octet-stream;
     server {
-        listen 8080;
+        listen 80;
         location / {
             return 200 'Modules loaded successfully';
         }
@@ -97,10 +97,10 @@ echo
 echo "8️⃣  Arrancando el contenedor con la configuración por defecto..."
 CONTAINER=$(docker run -d "$IMAGE")
 sleep 3
-if docker exec "$CONTAINER" wget -q -O /dev/null http://127.0.0.1:8080/ 2>/dev/null; then
-    echo "   ✅ Responde en :8080 como usuario $(docker exec "$CONTAINER" id -un)"
+if docker exec "$CONTAINER" wget -q -O /dev/null http://127.0.0.1/ 2>/dev/null; then
+    echo "   ✅ Responde en :80 como usuario $(docker exec "$CONTAINER" id -un)"
 else
-    echo "   ❌ No responde en :8080. Logs:"
+    echo "   ❌ No responde en :80. Logs:"
     docker logs "$CONTAINER" 2>&1 | tail -10 | sed 's/^/      /'
     docker rm -f "$CONTAINER" > /dev/null
     exit 1
