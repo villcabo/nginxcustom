@@ -1,122 +1,64 @@
 # Nginx Docker Images
 
-This repository contains custom Docker images for Nginx with additional features:
+Three hardened images built on official nginx and OpenResty. All of them:
+- run as the non-root `nginx` user (uid 101) and still listen on the standard `80` (and `443` where TLS applies). Docker allows it through `net.ipv4.ip_unprivileged_port_start=0`; see each guide for `--network host` and Kubernetes;
+- rotate their logs in-process with logrotate, configured from environment variables (no cron);
+- ship with a Docker `HEALTHCHECK` and stop gracefully.
 
-- **Nginx + Logrotate**: Nginx with automatic log rotation using logrotate.
-- **Nginx + Logrotate + GeoIP**: Nginx with log rotation, GeoIP2 and Brotli modules.
-- **OpenResty API Gateway**: OpenResty (nginx + Lua) with GeoIP2, Brotli, logrotate, and active upstream health checks (Traefik-style failover).
+| Image | Base | Use it for | Guide |
+|-------|------|------------|-------|
+| `villcabo/nginx-logrotate` | `nginx:1.31-alpine` | Static sites and plain reverse proxying. Lean, no extra modules. | [nginx-logrotate/README.md](nginx-logrotate/README.md) |
+| `villcabo/nginx-logrotate-geoip` | `nginx:1.31.6-trixie` | The same, plus GeoIP2 (country/city lookups) and Brotli as dynamic modules. | [nginx-logrotate-geoip/README.md](nginx-logrotate-geoip/README.md) |
+| `villcabo/openresty-apigateway` | `openresty/openresty:1.31.1.1-bookworm-fat` | **API gateway** in front of microservices: file-driven config with validation and hot reload, last-known-good fallback, DNS discovery, active health checks, rate limiting, JSON errors, request ids, Prometheus metrics. | [openresty-apigateway/README.md](openresty-apigateway/README.md) |
 
-## Features
+## Which one?
 
-- Automated log rotation for Nginx logs using logrotate and cron.
-- Easy to extend and customize.
-- Optional GeoIP support for IP-based geolocation.
+- **Serving files or proxying to a fixed backend**: `nginx-logrotate`.
+- **You need the client's country or city**: `nginx-logrotate-geoip`, with your own MaxMind databases mounted.
+- **Several services behind one entry point**: `openresty-apigateway`. Open-source nginx has no active health checks, which are an NGINX Plus feature, so it only learns that a backend is dead when a client request fails on it. The gateway adds them with Lua, along with the rest of the gateway behavior.
 
-## Usage
-
-### 1. Nginx + Logrotate
-
-This image runs Nginx and rotates logs based on a configurable interval and size threshold.
-
-**Build the image:**
-
-```bash
-docker build -t nginx-logrotate ./nginx-logrotate
-```
-
-**Run the container:**
-
-```bash
-docker run -d --name nginx-logrotate -p 8080:8080 \
-  -e LOGROTATE_FREQUENCY=daily \
-  -e LOGROTATE_MAXSIZE=1G \
-  nginx-logrotate
-```
-
-### 2. Nginx + Logrotate + GeoIP
-
-This image includes GeoIP support in addition to log rotation.
-
-**Build the image:**
-
-```bash
-docker build -t nginx-logrotate-geoip ./nginx-logrotate-geoip
-```
-
-**Run the container:**
-
-```bash
-docker run -d --name nginx-logrotate-geoip -p 8080:8080 \
-  -e LOGROTATE_FREQUENCY=daily \
-  -e LOGROTATE_MAXSIZE=1G \
-  nginx-logrotate-geoip
-```
-
-### 3. OpenResty API Gateway
-
-A file-driven API gateway on OpenResty (nginx + LuaJIT): routes and upstreams in plain files under `/etc/nginx/conf.d`, hot reload on change, DNS-based backend discovery (scale a service and the gateway follows), active health checks declared in JSON, JSON logs and errors, request ids and Prometheus metrics on an internal port. No GeoIP.
-
-**Build the image:**
-
-```bash
-docker build -t openresty-apigateway ./openresty-apigateway
-# or
-./build.sh apigateway
-```
-
-**Run the container:**
-
-```bash
-docker run -d --name openresty-apigateway -p 8080:8080 \
-  -v "$PWD/conf.d:/etc/nginx/conf.d:ro" \
-  -e LOGROTATE_FREQUENCY=daily \
-  -e LOGROTATE_MAXSIZE=1G \
-  openresty-apigateway
-```
-
-It has its own environment variables (log rotation by schedule or by size, config watching, resolver, trusted proxies). See `openresty-apigateway/README.md` and `openresty-apigateway/examples/`.
-
-## Environment Variables
-
-`nginx-logrotate` and `nginx-logrotate-geoip` accept the following variables at runtime (the API gateway has its own set, see its README):
+## Logs and rotation (all images)
 
 | Variable | Default | Description |
 | --- | --- | --- |
 | `LOGROTATE_FREQUENCY` | `daily` | `hourly`, `daily`, `weekly`, `monthly` — rotate on that schedule — or `size` to rotate only by size. |
-| `LOGROTATE_MAXSIZE` | `1G` | With a schedule: also rotate early when a file exceeds it (set it empty to disable). With `size`: the only trigger. Accepts `k`/`M`/`G` (e.g. `500M`, `2G`). |
-| `LOGROTATE_ROTATE` | `180` | Rotated files to keep per log. |
+| `LOGROTATE_MAXSIZE` | `1G` | With a schedule: also rotate early when a file exceeds it (set it empty to disable). With `size`: the only trigger. Accepts `k`/`M`/`G`. |
+| `LOGROTATE_ROTATE` | `180` (`30` on the gateway) | Rotated files to keep per log. |
 | `LOGROTATE_COMPRESS` | `true` | Gzip rotated files (the newest one stays uncompressed one cycle). |
-| `LOGROTATE_DELAY_SECONDS` | `300` | How often logrotate checks whether a rotation is due. It never forces one, so keep it well below the smallest trigger. |
+| `LOGROTATE_DELAY_SECONDS` | `300` | How often logrotate checks whether a rotation is due. It never forces one. |
 | `LOGROTATE_STATE_FILE` | `/var/log/nginx/.logrotate.status` | Rotation state; lives with the logs so schedules survive restarts. |
 
-The config is generated at startup; invalid values stop the container with a clear error. In the official nginx base images `/var/log/nginx/*.log` are symlinks to stdout/stderr, so there is only something to rotate when `/var/log/nginx` is a mounted volume.
+In the two nginx images, `/var/log/nginx/*.log` are symlinks to stdout/stderr, inherited from the official base. Bind-mount a host directory on `/var/log/nginx` to get files to rotate. A named volume copies the symlinks and rotates nothing. The gateway always writes files and also sends its error log to stderr.
 
-## Customization
+## Building
 
-- You can modify the Nginx configuration or logrotate rules by editing the files in the respective directories.
-- To add more modules or change the log rotation schedule, update the Dockerfile or entrypoint scripts as needed.
+```bash
+./build.sh logrotate               # → nginx-logrotate/
+./build.sh logrotate-geoip         # → nginx-logrotate-geoip/
+./build.sh apigateway --no-cache   # → openresty-apigateway/
+```
 
-## Directory Structure
+The image tag comes from the `FROM` line of each Dockerfile. Local builds and pull-request builds get a `-beta` suffix.
+
+## Testing
+
+```bash
+./validate-image.sh villcabo/nginx-logrotate-geoip:1.31.6-trixie-beta   # modules load, container boots
+./test-apigateway/test.sh                                              # gateway acceptance suite
+```
+
+CI (`.github/workflows/docker-publish.yml`) runs the gateway suite first and publishes images only if it passes: `<version>-beta` on pull requests, `<version>` on `main`.
+
+## Repository layout
 
 ```
 nginxcustom/
-├── nginx-logrotate/
-│   ├── Dockerfile
-│   ├── entrypoint.sh
-│   └── ...
-├── nginx-logrotate-geoip/
-│   ├── Dockerfile
-│   └── ...
-├── openresty-apigateway/
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   ├── conf.d/
-│   ├── examples/
-│   ├── lualib/gateway/
-│   ├── snippets/
-│   └── ...
-├── test-apigateway/
-└── README.md
+├── nginx-logrotate/          Dockerfile, entrypoint.sh
+├── nginx-logrotate-geoip/    Dockerfile, entrypoint.sh, nginx-modules.conf
+├── openresty-apigateway/     Dockerfile, entrypoint.sh, nginx.conf, lualib/gateway/, snippets/, examples/, conf.d/
+├── test-apigateway/          docker compose harness + test.sh
+├── build.sh                  local multi-arch build helper
+└── validate-image.sh         geoip image validation
 ```
 
 ## License
