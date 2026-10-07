@@ -6,21 +6,38 @@ on:
     paths:
       - nginx-logrotate/**
       - nginx-logrotate-geoip/**
+      - openresty-apigateway/**
+      - test-apigateway/**
   pull_request:
     branches: [main]
     paths:
       - nginx-logrotate/**
       - nginx-logrotate-geoip/**
+      - openresty-apigateway/**
+      - test-apigateway/**
   workflow_dispatch:
 
 jobs:
+  # End-to-end acceptance tests of the API gateway; nothing is published
+  # unless they pass.
+  test-apigateway:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run gateway acceptance tests
+        run: ./test-apigateway/test.sh
+
   build-and-push:
+    needs: test-apigateway
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        module: [nginx-logrotate, nginx-logrotate-geoip]
+        module: [nginx-logrotate, nginx-logrotate-geoip, openresty-apigateway]
 
     steps:
       - name: Checkout repository
@@ -47,7 +64,7 @@ jobs:
           else
             # For push, always build all modules
             echo "Building all modules on push to main."
-            echo "CHANGED_DIR=[nginx-logrotate,nginx-logrotate-geoip]" >> ${GITHUB_ENV}
+            echo "CHANGED_DIR=[nginx-logrotate,nginx-logrotate-geoip,openresty-apigateway]" >> ${GITHUB_ENV}
           fi
       
       - name: Build and Push Docker images
@@ -73,15 +90,18 @@ jobs:
           # Change to the module directory
           cd "$DIR" || { log "Error: Could not change to directory '$DIR'"; exit 1; }
 
-          # Extract the Nginx version from the Dockerfile (compatible with format nginx:<version>-alpine)
+          # Extract base image version (supports nginx:<tag> and openresty/openresty:<tag>)
           NGINX_VERSION=$(grep -oP '(?<=FROM nginx:)[^ ]+' "Dockerfile" | head -1)
+          if [[ -z "$NGINX_VERSION" ]]; then
+            NGINX_VERSION=$(grep -oP '(?<=FROM openresty/openresty:)[^ ]+' "Dockerfile" | head -1)
+          fi
 
           if [[ -z "$NGINX_VERSION" ]]; then
-            log "No Nginx version found in file '$DIR/Dockerfile'. Skipping..."
+            log "No base image version found in file '$DIR/Dockerfile'. Skipping..."
             exit 1
           fi
 
-          log "Detected Nginx version: $NGINX_VERSION"
+          log "Detected base image version: $NGINX_VERSION"
 
           # Set tag suffix for pull_request
           TAG_SUFFIX=""

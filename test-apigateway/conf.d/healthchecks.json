@@ -1,0 +1,14 @@
+{
+  "defaults": {
+    "path": "/health",
+    "host": "backend",
+    "interval": 2000,
+    "timeout": 1000,
+    "fall": 2,
+    "rise": 2
+  },
+  "upstreams": {
+    "backend_api": {},
+    "scaled_api": {}
+  }
+}

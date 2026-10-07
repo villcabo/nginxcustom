@@ -2,7 +2,7 @@
 # Script de validación para imagen nginx-logrotate-geoip
 # Uso: ./validate-image.sh [imagen:tag]
 
-IMAGE=${1:-"villcabo/nginx-logrotate-geoip:1.29.0-bookworm-beta"}
+IMAGE=${1:-"villcabo/nginx-logrotate-geoip:1.31.6-trixie-beta"}
 
 echo "🔍 Validando imagen: $IMAGE"
 echo "════════════════════════════════════════════════════════════════"
@@ -75,15 +75,10 @@ echo
 echo "5️⃣  Verificando archivos de configuración..."
 docker run --rm --entrypoint="" "$IMAGE" sh -c "
     echo '   📄 Archivos de configuración incluidos:'
-    if [ -f '/etc/nginx/conf.d/modules-example.conf' ]; then
-        echo '      ✅ modules-example.conf'
+    if [ -f '/etc/nginx/examples/modules.conf' ]; then
+        echo '      ✅ examples/modules.conf'
     else
-        echo '      ❌ modules-example.conf faltante'
-    fi
-    if [ -f '/etc/logrotate.d/nginx' ]; then
-        echo '      ✅ logrotate.conf'
-    else
-        echo '      ❌ logrotate.conf faltante'
+        echo '      ❌ examples/modules.conf faltante'
     fi
 "
 
@@ -96,6 +91,26 @@ docker run --rm --entrypoint="" "$IMAGE" nginx -V 2>&1 | head -3
 echo
 echo "7️⃣  Información de la imagen..."
 docker images "$IMAGE" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}"
+
+# 8. Arrancar la imagen con su configuración por defecto
+echo
+echo "8️⃣  Arrancando el contenedor con la configuración por defecto..."
+CONTAINER=$(docker run -d "$IMAGE")
+sleep 3
+if docker exec "$CONTAINER" wget -q -O /dev/null http://127.0.0.1/ 2>/dev/null; then
+    echo "   ✅ Responde en :80 como usuario $(docker exec "$CONTAINER" id -un)"
+else
+    echo "   ❌ No responde en :80. Logs:"
+    docker logs "$CONTAINER" 2>&1 | tail -10 | sed 's/^/      /'
+    docker rm -f "$CONTAINER" > /dev/null
+    exit 1
+fi
+if docker exec "$CONTAINER" grep -q 'rotate ' /etc/logrotate.d/nginx; then
+    echo "   ✅ Configuración de logrotate generada al arrancar"
+else
+    echo "   ❌ Falta /etc/logrotate.d/nginx"
+fi
+docker rm -f "$CONTAINER" > /dev/null
 
 echo
 echo "🎉 Validación completada!"
