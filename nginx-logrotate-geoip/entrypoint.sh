@@ -113,16 +113,18 @@ render_logrotate_conf
 # Function to handle shutdown gracefully
 cleanup() {
     echo "Shutting down services..."
-    nginx -s quit
+    nginx -s quit || kill -QUIT "$nginx_pid"
+    wait "$nginx_pid" || true
     exit 0
 }
 
-# Set up signal handlers
-trap cleanup SIGTERM SIGINT
-
 # Start Nginx in the foreground
-echo "Starting (Nginx + LogRotate + GeoIP + Brotli) in Debian Bookworm..."
+echo "Starting (Nginx + LogRotate + GeoIP + Brotli) on Debian Trixie..."
 nginx -g "daemon off;" &
+nginx_pid=$!
 
-# Keep the script running and wait for signals
-wait $!
+# SIGQUIT is the image STOPSIGNAL (docker stop); without it bash as PID 1
+# ignores the signal and the container is SIGKILLed after the grace period.
+trap cleanup SIGTERM SIGINT SIGQUIT
+
+wait "$nginx_pid"
