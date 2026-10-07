@@ -78,7 +78,7 @@ http {
 
 ## Example Configuration
 
-See `/etc/nginx/conf.d/modules-example.conf` inside the container for a complete example.
+See `/etc/nginx/examples/modules.conf` inside the container for a complete example.
 
 ## Build Command
 

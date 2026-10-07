@@ -1,4 +1,4 @@
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 
 LABEL maintainer="Bismarck Villca Soliz <bismarck.villca@gmail.com>"
 
@@ -14,12 +14,12 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Add Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null http://localhost:8080/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
 
 # Configure Nginx for non-root execution
 RUN sed -i 's/listen       80;/listen       8080;/g' /etc/nginx/conf.d/default.conf && \
     sed -i 's/user  nginx;//g' /etc/nginx/nginx.conf && \
-    sed -i 's/pid        \/var\/run\/nginx.pid;/pid        \/tmp\/nginx.pid;/g' /etc/nginx/nginx.conf && \
+    sed -i 's|^pid .*|pid        /tmp/nginx.pid;|' /etc/nginx/nginx.conf && \
     chown -R nginx:nginx /var/cache/nginx /var/log/nginx /etc/nginx/conf.d /etc/logrotate.d && \
     touch /var/run/nginx.pid && \
     chown -R nginx:nginx /var/run/nginx.pid /tmp
