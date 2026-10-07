@@ -10,8 +10,16 @@
   "upstreams": {
     "orders_api": {
       "path": "/actuator/health",
-      "host": "orders.internal"
+      "host": "orders"
     },
-    "users_api": {}
+    "users_api": {
+      "path": "/actuator/health/readiness",
+      "host": "users"
+    },
+    "billing_api": {
+      "type": "https",
+      "host": "billing.internal.example.com",
+      "path": "/healthz"
+    }
   }
 }

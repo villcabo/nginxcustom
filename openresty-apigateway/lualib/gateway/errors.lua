@@ -19,14 +19,15 @@ local CODES = {
     [504] = "gateway_timeout",
 }
 
+-- Keys are written in a fixed order (cjson does not keep one) so clients and
+-- log searches see the same shape every time.
 function _M.render()
     local status = ngx.status
     ngx.header["Content-Type"] = "application/json"
-    ngx.say(cjson.encode({
-        error = CODES[status] or "error",
-        status = status,
-        request_id = ngx.var.gateway_request_id,
-    }))
+    ngx.say(string.format('{"error":%s,"status":%d,"request_id":%s}',
+        cjson.encode(CODES[status] or "error"),
+        status,
+        cjson.encode(ngx.var.gateway_request_id or "")))
 end
 
 return _M
