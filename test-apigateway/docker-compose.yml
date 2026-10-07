@@ -7,14 +7,16 @@ services:
     build:
       context: ../openresty-apigateway
     container_name: apigw-gateway
+    # Longer than GATEWAY_WORKER_SHUTDOWN_TIMEOUT (30s) so in-flight requests drain.
+    stop_grace_period: 35s
     restart: unless-stopped
     networks:
       - apigw
     ports:
-      - "8080:8080"
+      - "8080:80"
       - "127.0.0.1:8081:8081"
     volumes:
-      - ./conf.d:/etc/nginx/conf.d:ro
+      - ${GATEWAY_CONF_DIR:-./conf.d}:/etc/nginx/conf.d:ro
     depends_on:
       - backend1
       - backend2

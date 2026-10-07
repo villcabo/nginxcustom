@@ -28,7 +28,8 @@ while :; do
     status=$(curl -fsS "${STATUS}/status/upstreams" 2>/dev/null || true)
     # Status page lists peers as "<ip>:<port> UP|DOWN" — peers are resolved
     # from hostname to IP by the healthchecker, so match on the trailing UP.
-    up_count=$(echo "$status" | grep -cE ':[0-9]+[[:space:]]+UP([[:space:]]|$)' || true)
+    # Count only the backend_api pool: the page also lists scaled_api.
+    up_count=$(echo "$status" | awk '/^Upstream backend_api/ {f=1; next} /^Upstream/ {f=0} f && / UP$/ {n++} END {print n+0}')
     if [[ "$up_count" -ge 2 ]]; then
         echo "$(green "Both peers UP. Status page:")"
         echo "$status" | sed 's/^/    /'

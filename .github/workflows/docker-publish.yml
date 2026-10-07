@@ -7,16 +7,31 @@ on:
       - nginx-logrotate/**
       - nginx-logrotate-geoip/**
       - openresty-apigateway/**
+      - test-apigateway/**
   pull_request:
     branches: [main]
     paths:
       - nginx-logrotate/**
       - nginx-logrotate-geoip/**
       - openresty-apigateway/**
+      - test-apigateway/**
   workflow_dispatch:
 
 jobs:
+  # End-to-end acceptance tests of the API gateway; nothing is published
+  # unless they pass.
+  test-apigateway:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run gateway acceptance tests
+        run: ./test-apigateway/test.sh
+
   build-and-push:
+    needs: test-apigateway
     runs-on: ubuntu-latest
 
     strategy:

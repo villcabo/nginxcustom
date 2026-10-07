@@ -2,6 +2,24 @@
 
 End-to-end test for the active health check + transparent failover behavior of `openresty-apigateway/`. Spins up the gateway with two mock backends that simulate Spring-Boot-style cold starts (~25s before they answer `/health`), then continuously probes the gateway while you kill and resurrect backends.
 
+## Automated suite
+
+```bash
+./test.sh
+```
+
+`test.sh` works on a throwaway copy of `conf.d`, brings the harness up, asserts every contract below, tears it down, and exits non-zero on any failure. CI runs it before publishing images. It checks:
+- balancing on the static and DNS pools;
+- JSON 404/413, 429 on a burst, `X-Request-ID` propagation and replacement, spoofed `X-Forwarded-For` discarded, no `Server` header;
+- metrics, including `gateway_config_valid`;
+- zero client errors while a backend stops, and the backend coming back;
+- a third replica discovered without reload;
+- hot reload of a valid file, rejection of an invalid `.conf` and of a broken or misspelled `healthchecks.json` (with the last known-good config still serving);
+- a restart on an invalid `conf.d` that falls back to the last snapshot;
+- clean exit on `docker stop`.
+
+The sections below are the manual, interactive version.
+
 ## What gets tested
 
 - **Cold-start handling.** Backends sleep 25s before serving. The gateway's healthchecker probes every 2s; peers stay marked DOWN until they actually answer `/health`. The gateway must not forward client traffic to them during this window.
@@ -12,7 +30,7 @@ End-to-end test for the active health check + transparent failover behavior of `
 
 ```
             +-------------------+
-            |  apigw-gateway    |  :8080 traffic, 127.0.0.1:8081 status
+            |  apigw-gateway    |  :80 traffic (host 8080), 127.0.0.1:8081 status
             |  openresty-apigw  |
             |  active hc 2s     |
             +---------+---------+
@@ -97,7 +115,7 @@ for i in $(seq 8); do curl -s http://localhost:8080/scaled/; done
 
 ## Hot reload
 
-`conf.d/` is mounted read-only from this directory. Add or edit a `.conf` file and the gateway validates it and reloads within `GATEWAY_WATCH_INTERVAL` (2s here); an invalid file is rejected and the running config keeps serving. Check `docker compose logs gateway`.
+`conf.d/` is mounted read-only from this directory (or from `GATEWAY_CONF_DIR`). Add or edit a `.conf` file and the gateway validates it and reloads within `GATEWAY_WATCH_INTERVAL` (2s here). An invalid file is rejected and the last known-good config keeps serving. Check `curl -s localhost:8081/status/config` and `docker compose logs gateway`.
 
 ## Tunables
 
@@ -126,4 +144,5 @@ docker compose down -v
 | `backend/Dockerfile`       | Mock backend image (alpine nginx + delay).                 |
 | `backend/start.sh`         | Sleep STARTUP_DELAY, render conf from template, exec nginx.|
 | `backend/default.conf.tmpl`| Template with `__BACKEND_ID__` placeholder.                |
-| `test-failover.sh`         | Wait-for-up + continuous probe loop.                       |
+| `test.sh`                  | Automated acceptance suite (used by CI).                   |
+| `test-failover.sh`         | Interactive wait-for-up + continuous probe loop.           |

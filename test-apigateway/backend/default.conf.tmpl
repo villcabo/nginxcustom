@@ -12,6 +12,6 @@ server {
     # Root returns identity so we can tell which backend answered.
     location / {
         default_type application/json;
-        return 200 '{"backend":"__BACKEND_ID__","host":"$hostname"}\n';
+        return 200 '{"backend":"__BACKEND_ID__","host":"$hostname","xff":"$http_x_forwarded_for","request_id":"$http_x_request_id"}\n';
     }
 }
