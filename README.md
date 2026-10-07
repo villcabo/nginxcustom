@@ -54,7 +54,7 @@ docker run -d --name nginx-logrotate-geoip -p 8080:8080 \
 
 ### 3. OpenResty API Gateway
 
-OpenResty (nginx + LuaJIT) with GeoIP2, Brotli, logrotate, and **active upstream health checks** via the bundled `lua-resty-upstream-healthcheck` library. Use this image when you need Traefik-style transparent failover between backends — peers are probed every 2s and removed from the pool *before* a client request hits a dead one.
+A file-driven API gateway on OpenResty (nginx + LuaJIT): routes and upstreams in plain files under `/etc/nginx/conf.d`, hot reload on change, DNS-based backend discovery (scale a service and the gateway follows), active health checks declared in JSON, JSON logs and errors, request ids and Prometheus metrics on an internal port. No GeoIP.
 
 **Build the image:**
 
@@ -68,16 +68,17 @@ docker build -t openresty-apigateway ./openresty-apigateway
 
 ```bash
 docker run -d --name openresty-apigateway -p 8080:8080 \
-  -e LOGROTATE_DELAY_SECONDS=3600 \
+  -v "$PWD/conf.d:/etc/nginx/conf.d:ro" \
+  -e LOGROTATE_FREQUENCY=daily \
   -e LOGROTATE_MAXSIZE=1G \
   openresty-apigateway
 ```
 
-See `openresty-apigateway/README.md` and `openresty-apigateway/apigateway-example.conf` for upstream + health check + rate limiting configuration examples.
+It has its own environment variables (log rotation by schedule or by size, config watching, resolver, trusted proxies). See `openresty-apigateway/README.md` and `openresty-apigateway/examples/`.
 
 ## Environment Variables
 
-All three images accept the following variables at runtime:
+`nginx-logrotate` and `nginx-logrotate-geoip` accept the following variables at runtime (the API gateway has its own set, see its README):
 
 | Variable | Default | Description |
 | --- | --- | --- |
@@ -102,8 +103,13 @@ nginxcustom/
 │   └── ...
 ├── openresty-apigateway/
 │   ├── Dockerfile
-│   ├── apigateway-example.conf
+│   ├── nginx.conf
+│   ├── conf.d/
+│   ├── examples/
+│   ├── lualib/gateway/
+│   ├── snippets/
 │   └── ...
+├── test-apigateway/
 └── README.md
 ```
 

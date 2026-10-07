@@ -1,38 +1,61 @@
+networks:
+  apigw:
+    driver: bridge
+
 services:
   gateway:
     build:
       context: ../openresty-apigateway
     container_name: apigw-gateway
+    restart: unless-stopped
+    networks:
+      - apigw
     ports:
       - "8080:8080"
+      - "127.0.0.1:8081:8081"
     volumes:
-      - ./nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./conf.d:/etc/nginx/conf.d:ro
     depends_on:
       - backend1
       - backend2
-    networks:
-      - apigw
+      - scaled
+    environment:
+      LOGROTATE_FREQUENCY: ${LOGROTATE_FREQUENCY:-daily}
+      LOGROTATE_MAXSIZE: ${LOGROTATE_MAXSIZE:-1G}
+      GATEWAY_WATCH_INTERVAL: ${GATEWAY_WATCH_INTERVAL:-2}
 
   backend1:
     build:
       context: ./backend
     container_name: apigw-backend1
+    restart: unless-stopped
+    networks:
+      - apigw
     environment:
       BACKEND_ID: backend1
       STARTUP_DELAY: "0"
-    networks:
-      - apigw
 
   backend2:
     build:
       context: ./backend
     container_name: apigw-backend2
+    restart: unless-stopped
+    networks:
+      - apigw
     environment:
       BACKEND_ID: backend2
       STARTUP_DELAY: "0"
+
+  # Replicated service behind one DNS name; scale it with
+  # `docker compose up -d --scale scaled=N` to exercise DNS-based discovery.
+  scaled:
+    build:
+      context: ./backend
+    restart: unless-stopped
     networks:
       - apigw
-
-networks:
-  apigw:
-    driver: bridge
+    deploy:
+      replicas: 2
+    environment:
+      BACKEND_ID: scaled
+      STARTUP_DELAY: "0"

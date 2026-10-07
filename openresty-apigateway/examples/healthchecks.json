@@ -1,0 +1,17 @@
+{
+  "defaults": {
+    "path": "/health",
+    "interval": 2000,
+    "timeout": 1000,
+    "fall": 2,
+    "rise": 2,
+    "valid_statuses": [200, 204]
+  },
+  "upstreams": {
+    "orders_api": {
+      "path": "/actuator/health",
+      "host": "orders.internal"
+    },
+    "users_api": {}
+  }
+}

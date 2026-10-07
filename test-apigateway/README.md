@@ -12,18 +12,18 @@ End-to-end test for the active health check + transparent failover behavior of `
 
 ```
             +-------------------+
-            |  apigw-gateway    |  :8080  (host port published)
+            |  apigw-gateway    |  :8080 traffic, 127.0.0.1:8081 status
             |  openresty-apigw  |
             |  active hc 2s     |
             +---------+---------+
                       |
-              +-------+-------+
-              |               |
-       +------v-----+   +-----v------+
-       | backend1   |   | backend2   |
-       | nginx +    |   | nginx +    |
-       | sleep 25s  |   | sleep 25s  |
-       +------------+   +------------+
+         +------------+-------------+
+         |  backend_api (static)    |  scaled_api (DNS, resolve)
+         |                          |
+  +------v-----+  +-----v------+  +-v-----------------+
+  | backend1   |  | backend2   |  | scaled x N        |
+  | nginx      |  | nginx      |  | --scale scaled=N  |
+  +------------+  +------------+  +-------------------+
 ```
 
 ## Run
@@ -38,7 +38,7 @@ docker compose up --build
 
 ## What you should see
 
-**Phase 1 — boot.** The script polls `/healthcheck-status` and waits up to 90s for both peers to be UP. While the backends are still sleeping you'll see DOWN entries — that's correct. They flip to UP within ~4s of the backend actually starting to answer `/health`.
+**Phase 1 — boot.** The script polls `http://localhost:8081/status/upstreams` and waits up to 90s for both peers to be UP. While the backends are still sleeping you'll see DOWN entries — that's correct. They flip to UP within ~4s of the backend actually starting to answer `/health`.
 
 **Phase 2 — steady state.** Once UP, the loop prints lines like:
 
@@ -71,13 +71,12 @@ Wait ~25s for the cold start. ~4s after backend1 starts answering `/health`, you
 ## Inspect health-check state directly
 
 ```bash
-curl -s http://localhost:8080/healthcheck-status
+curl -s http://localhost:8081/status/upstreams
 ```
 
 Sample output:
 
 ```
-Worker PID: 17
 Upstream backend_api
   Primary Peers
     backend1:8080 UP
@@ -85,14 +84,29 @@ Upstream backend_api
   Backup Peers
 ```
 
+## DNS discovery (dynamic pool)
+
+`/scaled/` is served by `scaled_api`, an upstream with `server scaled:8080 resolve`. Scale the replicated service and watch the pool follow it without any gateway reload:
+
+```bash
+docker compose up -d --scale scaled=4 --no-recreate
+sleep 15
+curl -s http://localhost:8081/status/upstreams   # scaled_api now lists 4 peers, all probed
+for i in $(seq 8); do curl -s http://localhost:8080/scaled/; done
+```
+
+## Hot reload
+
+`conf.d/` is mounted read-only from this directory. Add or edit a `.conf` file and the gateway validates it and reloads within `GATEWAY_WATCH_INTERVAL` (2s here); an invalid file is rejected and the running config keeps serving. Check `docker compose logs gateway`.
+
 ## Tunables
 
 | Knob                 | Where                       | Default |
 |----------------------|-----------------------------|---------|
-| Probe interval       | `nginx.conf` `interval`     | 2000ms  |
-| Probe timeout        | `nginx.conf` `timeout`      | 1000ms  |
-| Failures → DOWN      | `nginx.conf` `fall`         | 2       |
-| Successes → UP       | `nginx.conf` `rise`         | 2       |
+| Probe interval       | `conf.d/healthchecks.json` `interval` | 2000ms  |
+| Probe timeout        | `conf.d/healthchecks.json` `timeout`  | 1000ms  |
+| Failures → DOWN      | `conf.d/healthchecks.json` `fall`     | 2       |
+| Successes → UP       | `conf.d/healthchecks.json` `rise`     | 2       |
 | Cold-start delay     | compose `STARTUP_DELAY`     | 25s     |
 | Probe loop interval  | env `INTERVAL` for script   | 5s      |
 
@@ -106,8 +120,9 @@ docker compose down -v
 
 | File                       | Role                                                       |
 |----------------------------|------------------------------------------------------------|
-| `docker-compose.yml`       | Three-service topology (gateway + 2 backends).             |
-| `nginx.conf`               | Gateway config mounted over OpenResty default.             |
+| `docker-compose.yml`       | Gateway, two fixed backends and a replicated `scaled` service. |
+| `conf.d/api.conf`          | Routes and upstreams, mounted at `/etc/nginx/conf.d`.      |
+| `conf.d/healthchecks.json` | Active health checks for both upstreams.                   |
 | `backend/Dockerfile`       | Mock backend image (alpine nginx + delay).                 |
 | `backend/start.sh`         | Sleep STARTUP_DELAY, render conf from template, exec nginx.|
 | `backend/default.conf.tmpl`| Template with `__BACKEND_ID__` placeholder.                |

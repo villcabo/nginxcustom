@@ -1,4 +1,4 @@
-FROM nginx:1.29-alpine
+FROM nginx:1.31-alpine
 
 ENV BACKEND_ID=unknown
 ENV STARTUP_DELAY=20

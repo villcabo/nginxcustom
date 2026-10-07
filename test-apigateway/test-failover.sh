@@ -6,6 +6,7 @@
 set -u
 
 GATEWAY="${GATEWAY:-http://localhost:8080}"
+STATUS="${STATUS:-http://localhost:8081}"
 INTERVAL="${INTERVAL:-1}"
 WAIT_TIMEOUT="${WAIT_TIMEOUT:-90}"
 
@@ -24,7 +25,7 @@ echo
 echo "$(yellow "Waiting for both peers to be UP (timeout ${WAIT_TIMEOUT}s)...")"
 deadline=$(( $(date +%s) + WAIT_TIMEOUT ))
 while :; do
-    status=$(curl -fsS "${GATEWAY}/healthcheck-status" 2>/dev/null || true)
+    status=$(curl -fsS "${STATUS}/status/upstreams" 2>/dev/null || true)
     # Status page lists peers as "<ip>:<port> UP|DOWN" — peers are resolved
     # from hostname to IP by the healthchecker, so match on the trailing UP.
     up_count=$(echo "$status" | grep -cE ':[0-9]+[[:space:]]+UP([[:space:]]|$)' || true)
